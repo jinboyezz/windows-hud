@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using WindowsHUD.Services;
 using Application = System.Windows.Application;
@@ -13,12 +14,19 @@ public sealed class TrayIconManager : IDisposable
     private readonly MainWindow _mainWindow;
     private readonly ToolStripMenuItem _lockMenuItem;
     private readonly ToolStripMenuItem _autoStartMenuItem;
+    private readonly ToolStripMenuItem _releaseMemoryMenuItem;
 
     public TrayIconManager(MainWindow mainWindow)
     {
         _mainWindow = mainWindow;
 
         var menu = new ContextMenuStrip();
+
+        _releaseMemoryMenuItem = new ToolStripMenuItem("一键释放内存");
+        _releaseMemoryMenuItem.Click += (_, _) => ReleaseMemory();
+        menu.Items.Add(_releaseMemoryMenuItem);
+
+        menu.Items.Add(new ToolStripSeparator());
 
         _lockMenuItem = new ToolStripMenuItem();
         _lockMenuItem.Click += (_, _) => ToggleLock();
@@ -60,6 +68,25 @@ public sealed class TrayIconManager : IDisposable
     private void ToggleLock()
     {
         _mainWindow.ToggleLock();
+    }
+
+    private async void ReleaseMemory()
+    {
+        _releaseMemoryMenuItem.Enabled = false;
+        try
+        {
+            var result = await Task.Run(() => MemoryCleanupService.RunCleanup());
+            long freedMb = Math.Max(0, result.FreedBytes) / 1024 / 1024;
+            _notifyIcon.ShowBalloonTip(
+                3000,
+                "Windows HUD",
+                $"已清理 {result.ProcessesCleaned} 个进程，释放约 {freedMb} MB 内存",
+                ToolTipIcon.Info);
+        }
+        finally
+        {
+            _releaseMemoryMenuItem.Enabled = true;
+        }
     }
 
     private void UpdateLockMenuText()
